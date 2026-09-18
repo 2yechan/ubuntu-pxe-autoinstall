@@ -1,5 +1,9 @@
 # Ubuntu 26.04 LTS 네트워크 무인 설치 컨테이너
 
+**해당 Repository는 Anthropic Claude Opus 5를 사용하여 Claude Code로 제작되었습니다.**
+
+---
+
 단일 Docker 컨테이너로 **DHCP + PXE(UEFI) + HTTP + autoinstall** 을 제공한다.
 같은 L2 네트워크의 빈 서버들을 전원만 넣으면 Ubuntu 26.04 LTS 가 설치되고,
 설치가 끝나면 지정한 계정으로 SSH 접속과 `sudo` 가 가능한 상태가 된다.
