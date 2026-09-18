@@ -1,0 +1,14 @@
+# Options for in.tftpd, sourced by bin/run_tftpd.sh.
+#
+#  --foreground  supervisord supervises the process directly
+#  --listen      standalone daemon (no inetd)
+#  --secure      chroot to the TFTP root; boot file names are relative to it
+#  --verbose     log every file transfer, which is most of the PXE debugging
+#                signal you ever get
+#  --blocksize   upper bound for RFC 2348 blksize negotiation.  1468 is also
+#                in.tftpd's own default; it is spelled out here because it is
+#                the knob to lower if your switches drop ~1500-byte UDP.
+TFTP_USERNAME="root"
+TFTP_DIRECTORY="{{TFTP_ROOT}}"
+TFTP_ADDRESS="0.0.0.0:69"
+TFTP_OPTIONS="--foreground --listen --secure --verbose --blocksize 1468"

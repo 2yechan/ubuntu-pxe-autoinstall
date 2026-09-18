@@ -1,0 +1,5 @@
+#cloud-config
+# Intentionally empty. cloud-init fetches vendor-data with retries=10 and one
+# second between tries, so answering 200 with nothing is ~10 seconds faster per
+# machine than letting it 404.
+{}

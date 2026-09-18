@@ -1,0 +1,82 @@
+; Generated at container start by bin/render_config.py.
+;
+; Every program logs to the container's stdout (stderr is folded in) and is
+; restarted for ever if it dies -- supervisord itself prints the exit status
+; and the respawn, so a crash loop is visible in `docker logs`.
+
+[supervisord]
+nodaemon=true
+user=root
+loglevel=info
+; nodaemon=true already installs a stdout handler for supervisord's own log,
+; so pointing logfile at stdout as well prints every line twice.
+logfile=/dev/null
+logfile_maxbytes=0
+pidfile=/run/supervisord.pid
+childlogdir=/var/log/supervisor
+
+[unix_http_server]
+file=/run/supervisor.sock
+chmod=0700
+
+[rpcinterface:supervisor]
+supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
+
+[supervisorctl]
+serverurl=unix:///run/supervisor.sock
+
+; ---------------------------------------------------------------------------
+; The autoinstall renderer comes up first: nginx proxies to it, and a machine
+; that PXE-boots the instant the container starts should not get a 502.
+; ---------------------------------------------------------------------------
+[program:autoinstall-http]
+command=/usr/bin/python3 -u /opt/pxe/bin/autoinstall_server.py
+priority=10
+autostart=true
+autorestart=true
+startsecs=3
+startretries=1000000
+stopsignal=TERM
+stopwaitsecs=10
+stdout_logfile=/dev/fd/1
+stdout_logfile_maxbytes=0
+redirect_stderr=true
+
+[program:nginx]
+command=/opt/pxe/bin/run_nginx.sh
+priority=20
+autostart=true
+autorestart=true
+startsecs=3
+startretries=1000000
+stopsignal=QUIT
+stopwaitsecs=15
+stdout_logfile=/dev/fd/1
+stdout_logfile_maxbytes=0
+redirect_stderr=true
+
+[program:tftpd]
+command=/opt/pxe/bin/run_tftpd.sh {{TFTPD_OPTIONS}}
+priority=30
+autostart=true
+autorestart=true
+startsecs=3
+startretries=1000000
+stopsignal=TERM
+stopwaitsecs=10
+stdout_logfile=/dev/fd/1
+stdout_logfile_maxbytes=0
+redirect_stderr=true
+
+[program:kea-dhcp4]
+command=/usr/sbin/kea-dhcp4 -c {{KEA_CONF}}
+priority=40
+autostart=true
+autorestart=true
+startsecs=5
+startretries=1000000
+stopsignal=TERM
+stopwaitsecs=15
+stdout_logfile=/dev/fd/1
+stdout_logfile_maxbytes=0
+redirect_stderr=true

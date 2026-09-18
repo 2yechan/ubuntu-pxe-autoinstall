@@ -1,0 +1,49 @@
+services:
+  pxe:
+    build:
+      context: .
+      # Which signed shim to hand out; see README.
+      args:
+        SHIM_VARIANT: dualsigned
+    image: ubuntu-pxe-autoinstall:26.04
+    container_name: ubuntu-pxe-autoinstall
+
+    # DHCP needs to see L2 broadcasts, so host networking is mandatory.
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+
+    # Deliberately NOT "unless-stopped".
+    #
+    # All state lives inside the container: the Kea lease file and the per-MAC
+    # grub.cfg files that tell finished machines to boot their own disk.  A
+    # restart throws both away, and a machine that has already been installed
+    # would then be offered the installer again and reinstall itself.
+    # Restart this container only when no installed machine is going to reboot.
+    restart: "no"
+
+    environment:
+      # ---- required -----------------------------------------------------
+      SUBNET: "192.168.101.0/24"
+      SERVER_IP: "192.168.101.253"
+      DHCP_RANGE: "192.168.101.1-192.168.101.45"
+      USER_NAME: "ubuntu"
+      USER_PASSWORD: "change-me"
+
+      # ---- optional (delete a line to leave the setting out entirely) ----
+      GATEWAY: "192.168.101.254"
+      DNS: "192.168.101.254,8.8.8.8"
+      # DHCP_INTERFACE: "eno1"
+      # SSH_PUBKEY: "ssh-ed25519 AAAA... you@example"
+      DISK_SIZING_POLICY: "all"
+      # BOOT_TRANSPORT: "tftp"   # "http" is measurably broken, see README section 7
+
+    volumes:
+      - ./ubuntu-26.04-live-server-amd64.iso:/iso/ubuntu-26.04-live-server-amd64.iso:ro
+
+    # Everything goes to stdout/stderr; keep a bounded amount of it.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"

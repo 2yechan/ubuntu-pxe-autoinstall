@@ -1,0 +1,5 @@
+# Never let an ISO leak into the build context: it is mounted at run time.
+*.iso
+.git
+README.md
+docker-compose.yml

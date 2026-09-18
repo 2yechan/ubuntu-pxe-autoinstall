@@ -1,0 +1,77 @@
+// Generated at container start by bin/render_config.py -- edit the template,
+// not this file.  Validated with `kea-dhcp4 -t` before the daemon is started.
+{
+  "Dhcp4": {
+    // Answer only on the PXE link.  Getting this wrong means handing out
+    // addresses on somebody else's network.
+    "interfaces-config": {
+      "interfaces": [ "{{DHCP_INTERFACE}}" ],
+      "dhcp-socket-type": "raw",
+      "service-sockets-max-retries": 5,
+      "service-sockets-retry-wait-time": 5000
+    },
+
+    // We are the only DHCP server on this segment (see README, "Operating
+    // assumptions"), so NAK requests we do not recognise instead of staying
+    // silent -- it makes a client that kept a stale lease recover immediately.
+    "authoritative": true,
+
+    // Identify clients by MAC only.  The PXE ROM, GRUB and the installer's
+    // kernel each send a *different* client-id for the same machine; keying on
+    // the client-id would give one machine three different addresses and break
+    // the "source IP -> node number" mapping the autoinstall service relies on.
+    "match-client-id": false,
+
+    "valid-lifetime": {{VALID_LIFETIME}},
+    "renew-timer": {{RENEW_TIMER}},
+    "rebind-timer": {{REBIND_TIMER}},
+
+    "lease-database": {
+      "type": "memfile",
+      "persist": true,
+      "name": "{{LEASE_FILE}}",
+      "lfc-interval": 3600
+    },
+
+    // RFC 4578 option 93 (client system architecture):
+    //   0x0007  EFI x86-64
+    //   0x0009  EFI x86-64 (alternative encoding used by some firmware)
+    // Only those get a boot file; legacy BIOS clients are deliberately ignored.
+    "client-classes": [
+      {
+        "name": "UEFI-x86-64",
+        "test": "option[93].hex == 0x0007 or option[93].hex == 0x0009",
+        "next-server": "{{SERVER_IP}}",
+        "boot-file-name": "{{BOOT_FILE}}"
+      }
+    ],
+
+    "subnet4": [
+      {
+        "id": 1,
+        "subnet": "{{SUBNET}}",
+
+        // The whole point of this appliance: hand out the pool strictly from
+        // the bottom up, so machines powered on in order get addresses in
+        // order.  (Iterative is Kea's default, but say it out loud -- this is
+        // load-bearing behaviour, not an incidental default.)
+        "allocator": "iterative",
+
+        "pools": [
+          { "pool": "{{POOL_START}} - {{POOL_END}}" }
+        ],
+        "option-data": {{SUBNET_OPTION_DATA}}
+      }
+    ],
+
+    "loggers": [
+      {
+        "name": "kea-dhcp4",
+        "output-options": [
+          { "output": "stdout", "flush": true }
+        ],
+        "severity": "INFO"
+      }
+    ]
+  }
+}

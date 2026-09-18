@@ -1,0 +1,32 @@
+# Written by the /done/{{MAC}} completion callback at {{TIMESTAMP}}.
+#
+# Host   : {{HOSTNAME}}
+# Address: {{CLIENT_IP}}
+#
+# grub/grub.cfg `configfile`s this instead of offering the installer, so this
+# machine now boots what it just installed.
+#
+# Delete this file to make {{HOSTNAME}} reinstall on its next PXE boot.
+
+set default=0
+set timeout=1
+set timeout_style=menu
+
+menuentry "{{HOSTNAME}} -- boot installed system from local disk" --id=local {
+    insmod part_gpt
+    insmod fat
+    insmod chain
+
+    # Chainload the *signed* shim from the ESP rather than grubx64.efi
+    # directly, so this path works with Secure Boot enabled.
+    if search --no-floppy --set=root --file /EFI/ubuntu/shimx64.efi; then
+        chainloader /EFI/ubuntu/shimx64.efi
+        boot
+    fi
+
+    # Nothing to chainload: leave GRUB entirely so the firmware moves on to its
+    # next boot option, instead of dropping the machine at a prompt.
+    echo "{{HOSTNAME}}: no ESP with \\EFI\\ubuntu\\shimx64.efi -- handing back to firmware."
+    sleep 5
+    exit
+}

@@ -1,0 +1,77 @@
+#cloud-config
+# Rendered on demand by bin/autoinstall_server.py -- one response per request.
+#
+#   host       : {{HOSTNAME}}
+#   client IP  : {{CLIENT_IP}}
+#   MAC        : {{MAC}}
+#   generated  : {{GENERATED_AT}}
+#
+# Schema: subiquity autoinstall version 1.
+autoinstall:
+  version: 1
+
+  locale: {{LOCALE}}
+  keyboard:
+    layout: {{KEYBOARD_LAYOUT}}
+
+  # Do not go looking for a newer subiquity on the snap store: there is no
+  # internet here, and the refresh check is a guaranteed stall.
+  refresh-installer:
+    update: false
+
+  source:
+    # Skip third-party driver detection (wants network + snapd).
+    search_drivers: false
+
+  # --- offline install -----------------------------------------------------
+  # The target machine *does* have a working link (we just gave it a lease), so
+  # subiquity will happily try to reach a mirror and sit there. Point the mirror
+  # test at this container, where nginx answers 404 immediately: the check fails
+  # in milliseconds instead of timing out, and `fallback: offline-install` takes
+  # over and installs from the pool on the ISO.
+  # late-commands below rewrite the target's sources.list to the real archive.
+  apt:
+    geoip: false
+    fallback: offline-install
+    preserve_sources_list: false
+    mirror-selection:
+      primary:
+        - uri: http://{{SERVER_IP}}/mirror
+
+  drivers:
+    install: false
+  codecs:
+    install: false
+  oem:
+    install: false
+  kernel-crash-dumps:
+    enabled: false
+
+  # --- storage -------------------------------------------------------------
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: {{DISK_SIZING_POLICY}}
+      match:
+        size: largest
+
+  # --- the login we are promising --------------------------------------
+  # subiquity gives this user uid 1000 and puts it in the sudo group.
+  identity:
+    realname: {{USER_NAME}}
+    username: {{USER_NAME}}
+    hostname: {{HOSTNAME}}
+    password: '{{PASSWORD_HASH}}'
+
+  ssh:
+    install-server: true
+    allow-pw: true
+{{SSH_AUTHORIZED_KEYS_BLOCK}}
+  # --- network -------------------------------------------------------------
+  # Intentionally absent: subiquity's default is DHCP on every wired link,
+  # which is what we want the installed system to keep doing.
+
+  late-commands:
+{{LATE_COMMANDS_BLOCK}}
+
+  shutdown: reboot

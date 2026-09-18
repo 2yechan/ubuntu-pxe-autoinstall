@@ -1,0 +1,97 @@
+# Generated at container start by bin/render_config.py.
+#
+# Serves three things:
+#   /boot/...        kernel + initrd extracted from the ISO
+#   /iso/<name>.iso  the ISO itself (casper pulls it into RAM via url=)
+#   /autoinstall/, /done/   reverse-proxied to the local Python renderer
+#
+# Everything is logged to the container's stdout/stderr.
+
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+error_log /dev/stderr info;
+
+events {
+    # ~45 machines pulling a multi-GB ISO at once, plus seed requests.
+    worker_connections 4096;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    log_format pxe '$remote_addr - [$time_local] "$request" $status '
+                   '$body_bytes_sent ${request_time}s "$http_user_agent"';
+    access_log /dev/stdout pxe;
+
+    sendfile           on;
+    sendfile_max_chunk 2m;
+    tcp_nopush         on;
+    server_tokens      off;
+
+    # Installer clients are slow and numerous; do not hang up on them mid-ISO.
+    keepalive_timeout  75s;
+    send_timeout       300s;
+
+    server {
+        # Bind to the advertised address only, so this container does not
+        # squat on port 80 of every address of the host.
+        listen {{SERVER_IP}}:80 default_server;
+        server_name _;
+
+        root {{HTTP_ROOT}};
+
+        # --- kernel + initrd (extracted from the ISO at start-up) ----------
+        location /boot/ {
+            alias {{HTTP_ROOT}}/boot/;
+            autoindex off;
+        }
+
+        # --- the installer ISO --------------------------------------------
+        # Exact match: this is the only file we publish out of the read-only
+        # ISO mount, and the name is whatever ISO_PATH points at.
+        location = /iso/{{ISO_NAME}} {
+            alias {{ISO_PATH}};
+        }
+
+        # --- cloud-init nocloud seed + completion callback -----------------
+        location /autoinstall/ {
+            proxy_pass         http://127.0.0.1:{{APP_PORT}};
+            proxy_http_version 1.1;
+            proxy_set_header   Host $host;
+            # The renderer derives the node number from the client address, so
+            # it has to survive the proxy hop.
+            proxy_set_header   X-Real-IP $remote_addr;
+            proxy_read_timeout 30s;
+        }
+
+        location /done/ {
+            proxy_pass         http://127.0.0.1:{{APP_PORT}};
+            proxy_http_version 1.1;
+            proxy_set_header   Host $host;
+            proxy_set_header   X-Real-IP $remote_addr;
+            proxy_read_timeout 30s;
+        }
+
+        location = /health {
+            proxy_pass       http://127.0.0.1:{{APP_PORT}};
+            proxy_set_header X-Real-IP $remote_addr;
+            access_log       off;
+        }
+
+        # --- deliberately-dead apt mirror ---------------------------------
+        # user-data points subiquity's mirror test here.  It fails instantly
+        # (no route to the internet needed, no TCP timeout to wait out), which
+        # is what trips `apt: fallback: offline-install` in seconds rather than
+        # minutes.  See README, "How the offline install is forced".
+        location /mirror {
+            access_log off;
+            return 404;
+        }
+
+        location / {
+            return 404;
+        }
+    }
+}

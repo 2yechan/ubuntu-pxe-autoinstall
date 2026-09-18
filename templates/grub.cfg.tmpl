@@ -1,0 +1,69 @@
+# Generated at container start by bin/render_config.py.
+#
+# Published over TFTP as <tftp-root>/grub/grub.cfg.
+#
+# Why that path: grubnetx64.efi.signed from grub-efi-amd64-signed
+# 1.215+2.14-2ubuntu1 embeds prefix "/grub" and an early config of
+# "normal (memdisk)/grub.cfg"; the squashfs memdisk it carries contains
+#
+#     if   [ -e $prefix/x86_64-efi/grub.cfg ]; then source $prefix/x86_64-efi/grub.cfg
+#     elif [ -e $prefix/grub.cfg-amd64 ];      then source $prefix/grub.cfg-default-amd64
+#     else source $prefix/grub.cfg ; fi
+#
+# We ship neither of the first two, so this file is what gets sourced, with
+# $prefix = (tftp,{{SERVER_IP}})/grub.
+#
+# Every module used below (test, configfile, linux, http, tftp, search,
+# search_fs_file, chain, fat, part_gpt) is built into that image, so nothing is
+# ever fetched from $prefix/x86_64-efi/.
+
+set default=0
+set pager=1
+
+# ---------------------------------------------------------------------------
+# 1. Already installed?
+#
+# The /done/<mac> callback drops a per-MAC config here when an install
+# finishes.  If one exists, hand over to it and never come back -- that is what
+# stops a freshly installed machine from reinstalling itself on next boot.
+# $net_default_mac is lowercase, colon-separated (GRUB formats it with a bare
+# "%02x:"), which is exactly the spelling the callback writes.
+# ---------------------------------------------------------------------------
+if [ -f "$prefix/grub.cfg-$net_default_mac" ]; then
+    echo "Found per-host config for $net_default_mac -- booting installed system."
+    configfile "$prefix/grub.cfg-$net_default_mac"
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Otherwise: install.  Short timeout so an unattended rack just goes.
+# ---------------------------------------------------------------------------
+set timeout={{MENU_TIMEOUT}}
+set timeout_style=menu
+
+menuentry "Install Ubuntu 26.04 LTS -- unattended  [$net_default_mac]" --id=install {
+    echo "MAC   : $net_default_mac"
+    echo "Seed  : http://{{SERVER_IP}}/autoinstall/$net_default_mac/"
+    echo "ISO   : http://{{SERVER_IP}}/iso/{{ISO_NAME}}"
+    echo ""
+    echo "Loading kernel ({{BOOT_TRANSPORT}}) ..."
+    # The ds= argument MUST stay quoted: ';' is a command separator in GRUB's
+    # parser, so an unquoted ds=nocloud-net;s=... would silently truncate the
+    # kernel command line at the semicolon and the installer would come up
+    # interactive with no seed.
+    linux {{KERNEL_URL}} ip=dhcp url=http://{{SERVER_IP}}/iso/{{ISO_NAME}} cloud-config-url=/dev/null autoinstall "ds=nocloud-net;s=http://{{SERVER_IP}}/autoinstall/$net_default_mac/" ---
+    echo "Loading initrd ({{BOOT_TRANSPORT}}) ..."
+    initrd {{INITRD_URL}}
+}
+
+menuentry "Boot from local disk" --id=local {
+    insmod part_gpt
+    insmod fat
+    insmod chain
+    if search --no-floppy --set=root --file /EFI/ubuntu/shimx64.efi; then
+        chainloader /EFI/ubuntu/shimx64.efi
+        boot
+    fi
+    echo "No ESP with \\EFI\\ubuntu\\shimx64.efi found."
+    sleep 5
+    exit
+}
